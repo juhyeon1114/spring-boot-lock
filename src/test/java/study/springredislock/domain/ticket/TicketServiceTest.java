@@ -73,5 +73,29 @@ class TicketServiceTest {
     public void bad() throws Exception {
         ticketing100(false);
     }
+    
+    @Test
+    @DisplayName("동시에 100명의 티켓팅 : Optimistic lock")
+    public void optimisticTicketingTest() throws Exception {
+        Long originQuantity = ticketRepository.findById(TICKET_ID).orElseThrow().getQuantity();
+
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(CONCURRENT_COUNT);
+
+        for (int i = 0; i < CONCURRENT_COUNT; i++) {
+            executorService.submit(() -> {
+                try {
+                    ticketService.optimisticTicketing(TICKET_ID, 1L);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+
+        Ticket ticket = ticketRepository.findById(TICKET_ID).orElseThrow();
+        assertEquals(originQuantity - CONCURRENT_COUNT, ticket.getQuantity());
+    }
 
 }

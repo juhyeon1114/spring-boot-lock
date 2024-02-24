@@ -11,4 +11,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Query("select t from Ticket t where t.id = :id")
     Ticket findByIdWithPLock(Long id);
 
+    @Lock(LockModeType.OPTIMISTIC)
+    @Query("select t from Ticket t where t.id = :id")
+    Ticket findByIdWithOLock(Long id);
+
 }
