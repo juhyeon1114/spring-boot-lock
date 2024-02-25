@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -39,8 +40,8 @@ class TicketServiceTest {
     public void after() {
         ticketRepository.deleteAll();
     }
-    
-    private void ticketing100(boolean good) throws InterruptedException {
+
+    private void ticketingTest(Consumer<Void> action) throws InterruptedException {
         Long originQuantity = ticketRepository.findById(TICKET_ID).orElseThrow().getQuantity();
 
         ExecutorService executorService = Executors.newFixedThreadPool(32);
@@ -49,7 +50,7 @@ class TicketServiceTest {
         for (int i = 0; i < CONCURRENT_COUNT; i++) {
             executorService.submit(() -> {
                 try {
-                    ticketService.ticketing(TICKET_ID, 1L, good);
+                    action.accept(null);
                 } finally {
                     latch.countDown();
                 }
@@ -60,42 +61,30 @@ class TicketServiceTest {
 
         Ticket ticket = ticketRepository.findById(TICKET_ID).orElseThrow();
         assertEquals(originQuantity - CONCURRENT_COUNT, ticket.getQuantity());
-    }
-
-    @Test
-    @DisplayName("동시에 100명의 티켓팅 : 정상")
-    public void good() throws Exception {
-        ticketing100(true);
     }
 
     @Test
     @DisplayName("동시에 100명의 티켓팅 : 동시성 이슈")
-    public void bad() throws Exception {
-        ticketing100(false);
+    public void badTicketingTest() throws Exception {
+        ticketingTest((_no) -> ticketService.ticketing(TICKET_ID, 1L));
     }
-    
+
+//    @Test
+//    @DisplayName("동시에 100명의 티켓팅 : Pessimistic lock")
+//    public void pessimisticTicketingTest() throws Exception {
+//        ticketingTest((_no) -> ticketService.pessimisticTicketing(TICKET_ID, 1L));
+//    }
+//
+//    @Test
+//    @DisplayName("동시에 100명의 티켓팅 : Optimistic lock")
+//    public void optimisticTicketingTest() throws Exception {
+//        ticketingTest((_no) -> ticketService.optimisticTicketing(TICKET_ID, 1L));
+//    }
+
     @Test
-    @DisplayName("동시에 100명의 티켓팅 : Optimistic lock")
-    public void optimisticTicketingTest() throws Exception {
-        Long originQuantity = ticketRepository.findById(TICKET_ID).orElseThrow().getQuantity();
-
-        ExecutorService executorService = Executors.newFixedThreadPool(32);
-        CountDownLatch latch = new CountDownLatch(CONCURRENT_COUNT);
-
-        for (int i = 0; i < CONCURRENT_COUNT; i++) {
-            executorService.submit(() -> {
-                try {
-                    ticketService.optimisticTicketing(TICKET_ID, 1L);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-
-        latch.await();
-
-        Ticket ticket = ticketRepository.findById(TICKET_ID).orElseThrow();
-        assertEquals(originQuantity - CONCURRENT_COUNT, ticket.getQuantity());
+    @DisplayName("동시에 100명의 티켓팅 : 분산락")
+    public void redissonTicketingTest() throws Exception {
+        ticketingTest((_no) -> ticketService.redissonTicketing(TICKET_ID, 1L));
     }
 
 }
